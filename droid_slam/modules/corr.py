@@ -1,6 +1,7 @@
 import torch
 import torch.nn.functional as F
 
+# key: cpp算子，需要编译后使用
 import droid_backends
 
 class CorrSampler(torch.autograd.Function):
@@ -31,7 +32,8 @@ class CorrBlock:
 
         batch, num, h1, w1, h2, w2 = corr.shape
         corr = corr.reshape(batch*num*h1*w1, 1, h2, w2)
-        
+
+        # 多层特征图
         for i in range(self.num_levels):
             self.corr_pyramid.append(
                 corr.view(batch*num, h1, w1, h2//2**i, w2//2**i))
@@ -42,11 +44,13 @@ class CorrBlock:
         batch, num, ht, wd, _ = coords.shape
         coords = coords.permute(0,1,4,2,3)
         coords = coords.contiguous().view(batch*num, 2, ht, wd)
-        
+
+        # 根据坐标提取金字塔特征
         for i in range(self.num_levels):
             corr = CorrSampler.apply(self.corr_pyramid[i], coords/2**i, self.radius)
             out_pyramid.append(corr.view(batch, num, -1, ht, wd))
 
+        # 在channel处拼接所有取出像素块
         return torch.cat(out_pyramid, dim=2)
 
     def cat(self, other):
@@ -64,9 +68,12 @@ class CorrBlock:
     def corr(fmap1, fmap2):
         """ all-pairs correlation """
         batch, num, dim, ht, wd = fmap1.shape
+        # [1,128,h/8*w/8]
+        # todo: 为什么 /4 ?
         fmap1 = fmap1.reshape(batch*num, dim, ht*wd) / 4.0
         fmap2 = fmap2.reshape(batch*num, dim, ht*wd) / 4.0
-        
+
+        # [1,h/8*w/8,128]*[1,128,h/8*w/8] = [1,h/8*w/8,h/8*w/8]
         corr = torch.matmul(fmap1.transpose(1,2), fmap2)
         return corr.view(batch, num, ht, wd, ht, wd)
 

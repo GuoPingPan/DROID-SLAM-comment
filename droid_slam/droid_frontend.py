@@ -75,6 +75,7 @@ class DroidFrontend:
     def __initialize(self):
         """ initialize the SLAM system """
 
+        #
         self.t0 = 0
         self.t1 = self.video.counter.value
 
@@ -109,6 +110,7 @@ class DroidFrontend:
         """ main update """
 
         # do initialization
+        # warmup 连续加够指定帧才开始更新
         if not self.is_initialized and self.video.counter.value == self.warmup:
             self.__initialize()
             

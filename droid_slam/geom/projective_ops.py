@@ -18,8 +18,11 @@ def coords_grid(ht, wd, **kwargs):
 def iproj(disps, intrinsics, jacobian=False):
     """ pinhole camera inverse projection """
     ht, wd = disps.shape[2:]
+    # [n,1],[n,1],[n,1],[n,1]
     fx, fy, cx, cy = extract_intrinsics(intrinsics)
-    
+
+    # y = wd个0~wd个ht
+    # x = ht个(0~ht)
     y, x = torch.meshgrid(
         torch.arange(ht).to(disps.device).float(),
         torch.arange(wd).to(disps.device).float())
@@ -97,11 +100,16 @@ def projective_transform(poses, depths, intrinsics, ii, jj, jacobian=False, retu
     """ map points from ii->jj """
 
     # inverse project (pinhole)
+    # torch.stack([X, Y, i, disps], dim=-1)
+    # X0 = 1,10,100,100,4
+    # J = [0,0,0,1]
     X0, Jz = iproj(depths[:,ii], intrinsics[:,ii], jacobian=jacobian)
     
     # transform
+    # 从 i 转到 j
     Gij = poses[:,jj] * poses[:,ii].inv()
 
+    # ii==jj应该是左右目相机的情况，但是不知道为什么是两者相等
     Gij.data[:,ii==jj] = torch.as_tensor([-0.1, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0], device="cuda")
     X1, Ja = actp(Gij, X0, jacobian=jacobian)
     

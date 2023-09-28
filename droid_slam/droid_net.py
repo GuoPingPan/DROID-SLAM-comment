@@ -70,6 +70,8 @@ class GraphAgg(nn.Module):
         net = self.relu(self.conv2(net))
 
         eta = self.eta(net).view(batch, -1, ht, wd)
+
+        # 每个pixel通道都变成8*8*9
         upmask = self.upmask(net).view(batch, -1, 8*8*9, ht, wd)
 
         return .01 * eta, upmask
@@ -78,6 +80,7 @@ class GraphAgg(nn.Module):
 class UpdateModule(nn.Module):
     def __init__(self):
         super(UpdateModule, self).__init__()
+        # key: level=4, (2*radius+1)**2
         cor_planes = 4 * (2*3 + 1)**2
 
         self.corr_encoder = nn.Sequential(
@@ -110,29 +113,39 @@ class UpdateModule(nn.Module):
 
     def forward(self, net, inp, corr, flow=None, ii=None, jj=None):
         """ RaftSLAM update operator """
-
+        # [1,1,128,h/8,w/8]
         batch, num, ch, ht, wd = net.shape
 
         if flow is None:
             flow = torch.zeros(batch, num, 4, ht, wd, device=net.device)
 
         output_dim = (batch, num, -1, ht, wd)
+
         net = net.view(batch*num, -1, ht, wd)
         inp = inp.view(batch*num, -1, ht, wd)        
         corr = corr.view(batch*num, -1, ht, wd)
         flow = flow.view(batch*num, -1, ht, wd)
 
+        # 2conv
         corr = self.corr_encoder(corr)
+
+        # 2conv -> channels=64
         flow = self.flow_encoder(flow)
+
+        # [1,128,h/8,w/8]
         net = self.gru(net, inp, corr, flow)
 
         ### update variables ###
+        # [1,1,128,h/8,w/8]
         delta = self.delta(net).view(*output_dim)
         weight = self.weight(net).view(*output_dim)
 
+        # [1,1,h/8,w/8,2]
         delta = delta.permute(0,1,3,4,2)[...,:2].contiguous()
+        # [1,1,h/8,w/8,2]
         weight = weight.permute(0,1,3,4,2)[...,:2].contiguous()
 
+        # [1,1,128,h/8,w/8]
         net = net.view(*output_dim)
 
         if ii is not None:
@@ -184,10 +197,12 @@ class DroidNet(nn.Module):
 
         ht, wd = images.shape[-2:]
         coords0 = pops.coords_grid(ht//8, wd//8, device=images.device)
-        
+
+        # 这里的 disps 是估算的
         coords1, _ = pops.projective_transform(Gs, disps, intrinsics, ii, jj)
         target = coords1.clone()
 
+        # key： 这里是在迭代更新光流、pose、disps
         Gs_list, disp_list, residual_list = [], [], []
         for step in range(num_steps):
             Gs = Gs.detach()

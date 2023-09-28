@@ -19,15 +19,15 @@ class DepthVideo:
         self.wd = wd = image_size[1]
 
         ### state attributes ###
-        self.tstamp = torch.zeros(buffer, device="cuda", dtype=torch.float).share_memory_()
-        self.images = torch.zeros(buffer, 3, ht, wd, device="cuda", dtype=torch.uint8)
-        self.dirty = torch.zeros(buffer, device="cuda", dtype=torch.bool).share_memory_()
-        self.red = torch.zeros(buffer, device="cuda", dtype=torch.bool).share_memory_()
-        self.poses = torch.zeros(buffer, 7, device="cuda", dtype=torch.float).share_memory_()
-        self.disps = torch.ones(buffer, ht//8, wd//8, device="cuda", dtype=torch.float).share_memory_()
-        self.disps_sens = torch.zeros(buffer, ht//8, wd//8, device="cuda", dtype=torch.float).share_memory_()
-        self.disps_up = torch.zeros(buffer, ht, wd, device="cuda", dtype=torch.float).share_memory_()
-        self.intrinsics = torch.zeros(buffer, 4, device="cuda", dtype=torch.float).share_memory_()
+        self.tstamp = torch.zeros(buffer,                   device="cuda", dtype=torch.float).share_memory_()
+        self.images = torch.zeros(buffer,       3, ht, wd,          device="cuda", dtype=torch.uint8)
+        self.dirty = torch.zeros(buffer,                            device="cuda", dtype=torch.bool).share_memory_()
+        self.red = torch.zeros(buffer,                                  device="cuda", dtype=torch.bool).share_memory_()
+        self.poses = torch.zeros(buffer,        7,          device="cuda", dtype=torch.float).share_memory_()
+        self.disps = torch.ones(buffer,         ht//8, wd//8,           device="cuda", dtype=torch.float).share_memory_()
+        self.disps_sens = torch.zeros(buffer,       ht//8, wd//8,           device="cuda", dtype=torch.float).share_memory_()
+        self.disps_up = torch.zeros(buffer,         ht, wd,             device="cuda", dtype=torch.float).share_memory_()
+        self.intrinsics = torch.zeros(buffer,       4,          device="cuda", dtype=torch.float).share_memory_()
 
         self.stereo = stereo
         c = 1 if not self.stereo else 2
@@ -44,6 +44,8 @@ class DepthVideo:
         return self.counter.get_lock()
 
     def __item_setter(self, index, item):
+
+        # 这里会保证 counter 是所有进程最大的那个？
         if isinstance(index, int) and index >= self.counter.value:
             self.counter.value = index + 1
         

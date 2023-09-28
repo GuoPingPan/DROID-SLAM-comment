@@ -29,6 +29,7 @@ class FactorGraph:
         self.corr, self.net, self.inp = None, None, None
         self.damping = 1e-6 * torch.ones_like(self.video.disps)
 
+        # torch.Size([1, 0, h, w, 2])
         self.target = torch.zeros([1, 0, ht, wd, 2], device=device, dtype=torch.float)
         self.weight = torch.zeros([1, 0, ht, wd, 2], device=device, dtype=torch.float)
 
@@ -44,6 +45,7 @@ class FactorGraph:
     def __filter_repeated_edges(self, ii, jj):
         """ remove duplicate edges """
 
+        # todo：取消每次都重新生成 set
         keep = torch.zeros(ii.shape[0], dtype=torch.bool, device=ii.device)
         eset = set(
             [(i.item(), j.item()) for i, j in zip(self.ii, self.jj)] +
@@ -100,15 +102,19 @@ class FactorGraph:
             return
 
         # place limit on number of factors
+        # max_factors(default = 48)
+        # 如果之前的边数+当前边数目大于最大边数，则去除某些边
         if self.max_factors > 0 and self.ii.shape[0] + ii.shape[0] > self.max_factors \
                 and self.corr is not None and remove:
-            
+
+            # 将数据按照age进行排序
             ix = torch.arange(len(self.age))[torch.argsort(self.age).cpu()]
             self.rm_factors(ix >= self.max_factors - ii.shape[0], store=True)
 
         net = self.video.nets[ii].to(self.device).unsqueeze(0)
 
         # correlation volume for new edges
+        # 对于新边计算相关体
         if self.corr_impl == "volume":
             c = (ii == jj).long()
             fmap1 = self.video.fmaps[ii,0].to(self.device).unsqueeze(0)
@@ -120,6 +126,7 @@ class FactorGraph:
             self.inp = inp if self.inp is None else torch.cat([self.inp, inp], 1)
 
         with torch.cuda.amp.autocast(enabled=False):
+            # target: ii 在 jj中的投影
             target, _ = self.video.reproject(ii, jj)
             weight = torch.zeros_like(target)
 
@@ -298,12 +305,18 @@ class FactorGraph:
     def add_neighborhood_factors(self, t0, t1, r=3):
         """ add edges between neighboring frames within radius r """
 
+        # ii tensor([0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3])
+        # jj tensor([0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3])
         ii, jj = torch.meshgrid(torch.arange(t0,t1), torch.arange(t0,t1))
         ii = ii.reshape(-1).to(dtype=torch.long, device=self.device)
         jj = jj.reshape(-1).to(dtype=torch.long, device=self.device)
 
+        # 在stereo时，相邻两帧是左右目，设置factor无效
         c = 1 if self.video.stereo else 0
 
+        # tensor([False,  True,  True,  True,  True, False,  True,  True,  True,  True,
+        #         False,  True,  True,  True,  True, False])
+        # 去除自己和自己的边、时间上小于r帧的边
         keep = ((ii - jj).abs() > c) & ((ii - jj).abs() <= r)
         self.add_factors(ii[keep], jj[keep])
 

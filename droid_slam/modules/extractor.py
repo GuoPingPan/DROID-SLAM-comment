@@ -127,6 +127,7 @@ class BasicEncoder(nn.Module):
         elif self.norm_fn == 'batch':
             self.norm1 = nn.BatchNorm2d(DIM)
 
+        # key： 沿着channels做norm，就是HWC1计算出一个值然后进行norm
         elif self.norm_fn == 'instance':
             self.norm1 = nn.InstanceNorm2d(DIM)
 
@@ -181,6 +182,8 @@ class BasicEncoder(nn.Module):
         return nn.Sequential(*layers)
 
     def forward(self, x):
+        # 1, 1, 3, h, w
+        # n 应该是为了stereo准备的
         b, n, c1, h1, w1 = x.shape
         x = x.view(b*n, c1, h1, w1)
 
@@ -196,3 +199,6 @@ class BasicEncoder(nn.Module):
 
         _, c2, h2, w2 = x.shape
         return x.view(b, n, c2, h2, w2)
+
+fnet = BasicEncoder(output_dim=128, norm_fn='instance')
+print(fnet)

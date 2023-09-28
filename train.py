@@ -8,16 +8,16 @@ from collections import OrderedDict
 import torch
 import torch.optim as optim
 from torch.utils.data import DataLoader
-from data_readers.factory import dataset_factory
+from droid_slam.data_readers.factory import dataset_factory
 
 from lietorch import SO3, SE3, Sim3
-from geom import losses
-from geom.losses import geodesic_loss, residual_loss, flow_loss
-from geom.graph_utils import build_frame_graph
+from droid_slam.geom import losses
+from droid_slam.geom.losses import geodesic_loss, residual_loss, flow_loss
+from droid_slam.geom.graph_utils import build_frame_graph
 
 # network
-from droid_net import DroidNet
-from logger import Logger
+from droid_slam.droid_net import DroidNet
+from droid_slam.logger import Logger
 
 # DDP training
 import torch.multiprocessing as mp
@@ -94,6 +94,7 @@ def train(gpu, args):
                     graph[i] = [j for j in range(N) if i!=j and abs(i-j) <= 2]
             
             # fix first to camera poses
+            # key：固定第一帧位姿为真实位姿
             Gs.data[:,0] = Ps.data[:,0].clone()
             Gs.data[:,1:] = Ps.data[:,[1]].clone()
             disp0 = torch.ones_like(disps[:,:,3::8,3::8])
@@ -107,9 +108,9 @@ def train(gpu, args):
                 poses_est, disps_est, residuals = model(Gs, images, disp0, intrinsics0, 
                     graph, num_steps=args.iters, fixedp=2)
 
-                geo_loss, geo_metrics = losses.geodesic_loss(Ps, poses_est, graph, do_scale=False)
-                res_loss, res_metrics = losses.residual_loss(residuals)
-                flo_loss, flo_metrics = losses.flow_loss(Ps, disps, poses_est, disps_est, intrinsics, graph)
+                geo_loss, geo_metrics = geodesic_loss(Ps, poses_est, graph, do_scale=False)
+                res_loss, res_metrics = residual_loss(residuals)
+                flo_loss, flo_metrics = flow_loss(Ps, disps, poses_est, disps_est, intrinsics, graph)
 
                 loss = args.w1 * geo_loss + args.w2 * res_loss + args.w3 * flo_loss
                 loss.backward()

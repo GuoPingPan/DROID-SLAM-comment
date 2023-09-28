@@ -16,6 +16,10 @@ from torch.multiprocessing import Process
 class Droid:
     def __init__(self, args):
         super(Droid, self).__init__()
+
+        self.net = None
+
+        # init net = DroidNet
         self.load_weights(args.weights)
         self.args = args
         self.disable_vis = args.disable_vis
@@ -24,6 +28,7 @@ class Droid:
         self.video = DepthVideo(args.image_size, args.buffer, stereo=args.stereo)
 
         # filter incoming frames so that there is enough motion
+        # key: self.net is create in load_weights
         self.filterx = MotionFilter(self.net, self.video, thresh=args.filter_thresh)
 
         # frontend process
@@ -39,6 +44,7 @@ class Droid:
             self.visualizer.start()
 
         # post processor - fill in poses for non-keyframes
+        # 在输出的时候给定那些非关键帧的帧位姿
         self.traj_filler = PoseTrajectoryFiller(self.net, self.video)
 
 

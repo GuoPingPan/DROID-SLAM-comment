@@ -77,6 +77,9 @@ class RGBDDataset(data.Dataset):
         intrinsics = np.array(intrinsics) / f
         
         disps = np.stack(list(map(read_disp, depths)), 0)
+
+        # 计算帧之间的距离
+        # 光流距离
         d = f * compute_distance_matrix_flow(poses, disps, intrinsics)
 
         # uncomment for nice visualization
@@ -84,8 +87,12 @@ class RGBDDataset(data.Dataset):
         # plt.imshow(d)
         # plt.show()
 
+
         graph = {}
+
+
         for i in range(d.shape[0]):
+            # 取出每行的j，然后取光流小于max_flow
             j, = np.where(d[i] < max_flow)
             graph[i] = (j, d[i,j])
 

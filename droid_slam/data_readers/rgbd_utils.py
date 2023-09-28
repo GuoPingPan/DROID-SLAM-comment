@@ -4,7 +4,7 @@ import os.path as osp
 import torch
 from lietorch import SE3
 
-import geom.projective_ops as pops
+import droid_slam.geom.projective_ops as pops
 from scipy.spatial.transform import Rotation
 
 
@@ -122,16 +122,20 @@ def compute_distance_matrix_flow(poses, disps, intrinsics):
 
     s = 2048
     for i in range(0, ii.shape[0], s):
+        # 给进去2048个顶点
+        # 根据真实位姿进行投影，去除光流大于100的点
         flow1, val1 = pops.induced_flow(poses, disps, intrinsics, ii[i:i+s], jj[i:i+s])
         flow2, val2 = pops.induced_flow(poses, disps, intrinsics, jj[i:i+s], ii[i:i+s])
         
         flow = torch.stack([flow1, flow2], dim=2)
         val = torch.stack([val1, val2], dim=2)
-        
+
+        # 将最大光流限制为100
         mag = flow.norm(dim=-1).clamp(max=MAX_FLOW)
         mag = mag.view(mag.shape[1], -1)
         val = val.view(val.shape[1], -1)
 
+        # val: exclude points too close to camera
         mag = (mag * val).mean(-1) / val.mean(-1)
         mag[val.mean(-1) < 0.7] = np.inf
 

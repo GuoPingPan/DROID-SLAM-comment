@@ -12,7 +12,7 @@ import time
 import argparse
 
 from torch.multiprocessing import Process
-from droid import Droid
+from droid_slam.droid import Droid
 
 import torch.nn.functional as F
 
@@ -25,6 +25,7 @@ def show_image(image):
 def image_stream(imagedir, calib, stride):
     """ image generator """
 
+    # 加载相机参数
     calib = np.loadtxt(calib, delimiter=" ")
     fx, fy, cx, cy = calib[:4]
 
@@ -34,25 +35,37 @@ def image_stream(imagedir, calib, stride):
     K[1,1] = fy
     K[1,2] = cy
 
+    # 加载数据集，stride进行抽帧
     image_list = sorted(os.listdir(imagedir))[::stride]
 
     for t, imfile in enumerate(image_list):
+
+        # [h,w,3]
         image = cv2.imread(os.path.join(imagedir, imfile))
+
+        # 去畸变
         if len(calib) > 4:
             image = cv2.undistort(image, K, calib[4:])
 
+        # 将图像缩放成 384 * 512
         h0, w0, _ = image.shape
         h1 = int(h0 * np.sqrt((384 * 512) / (h0 * w0)))
         w1 = int(w0 * np.sqrt((384 * 512) / (h0 * w0)))
 
         image = cv2.resize(image, (w1, h1))
+
+        # 化成8的倍数
         image = image[:h1-h1%8, :w1-w1%8]
+
+        # toTensor:[3,h0,w0]
         image = torch.as_tensor(image).permute(2, 0, 1)
 
+        # [fx, fy, cx, cy] 乘上缩放比例
         intrinsics = torch.as_tensor([fx, fy, cx, cy])
         intrinsics[0::2] *= (w1 / w0)
         intrinsics[1::2] *= (h1 / h0)
 
+        # 返回生成器
         yield t, image[None], intrinsics
 
 
@@ -105,6 +118,7 @@ if __name__ == '__main__':
     parser.add_argument("--reconstruction_path", help="path to saved reconstruction")
     args = parser.parse_args()
 
+    # demo 默认stereo = False
     args.stereo = False
     torch.multiprocessing.set_start_method('spawn')
 
@@ -119,9 +133,11 @@ if __name__ == '__main__':
         if t < args.t0:
             continue
 
+        # image = Tensor[1,3,h0,w0]
         if not args.disable_vis:
             show_image(image[0])
 
+        # 这里将 image_size 设置成 image_stream 的size
         if droid is None:
             args.image_size = [image.shape[2], image.shape[3]]
             droid = Droid(args)
